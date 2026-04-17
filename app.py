@@ -24,7 +24,10 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-client = Groq()
+import os
+from groq import Groq
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 MODEL = "llama-3.3-70b-versatile"
 MAX_DOC_CHARS = 200_000
 
