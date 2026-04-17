@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <h1>Doc Assistant</h1>
+            <p class="subtitle">Upload a document and ask anything about it.</p>
+
+            <div id="drop-zone" class="drop-zone">
+                <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md" hidden>
+                <div class="drop-inner">
+                    <div class="icon">📄</div>
+                    <p><strong>Drop a file here</strong> or click to browse</p>
+                    <p class="hint">PDF, DOCX, TXT, MD · max 25MB</p>
+                </div>
+            </div>
+
+            <div id="doc-info" class="doc-info hidden">
+                <div class="doc-name"></div>
+                <div class="doc-meta"></div>
+                <button id="reset-btn" class="reset-btn">Replace document</button>
+            </div>
+        </aside>
+
+        <main class="chat">
+            <div id="messages" class="messages">
+                <div class="empty-state">
+                    <h2>Ready when you are.</h2>
+                    <p>Upload a document on the left to begin the conversation.</p>
+                </div>
+            </div>
+
+            <form id="chat-form" class="composer">
+                <textarea id="chat-input" placeholder="Ask a question about your document..." rows="1" disabled></textarea>
+                <button type="submit" id="send-btn" disabled>Send</button>
+            </form>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

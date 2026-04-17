@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ai-assistant
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 app:app
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FLASK_SECRET
+        generateValue: true
+      - key: APP_PASSWORD
+        sync: false

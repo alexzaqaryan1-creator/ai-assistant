@@ -1,0 +1,11 @@
+.env
+.env.local
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.msix
+.DS_Store
+.vscode/
+.idea/
+*.log
