@@ -20,7 +20,7 @@ jobs:
       - name: Import check
         run: python -c "import app; print('app imports OK')"
         env:
-          ANTHROPIC_API_KEY: dummy-for-import-only
+          GROQ_API_KEY: dummy-for-import-only
 
   deploy:
     needs: test

@@ -9,7 +9,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from docx import Document as DocxDocument
 from pypdf import PdfReader
-import anthropic
+from groq import Groq, APIStatusError, APIConnectionError
 
 load_dotenv()
 
@@ -24,8 +24,9 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-client = anthropic.Anthropic()
-MODEL = "claude-opus-4-7"
+client = Groq()
+MODEL = "llama-3.3-70b-versatile"
+MAX_DOC_CHARS = 200_000
 
 DOCUMENTS: dict[str, dict] = {}
 
@@ -91,6 +92,11 @@ def upload():
     if not text.strip():
         return jsonify({"error": "Document appears to be empty"}), 400
 
+    truncated = False
+    if len(text) > MAX_DOC_CHARS:
+        text = text[:MAX_DOC_CHARS]
+        truncated = True
+
     doc_id = uuid.uuid4().hex
     DOCUMENTS[doc_id] = {
         "filename": file.filename,
@@ -102,6 +108,7 @@ def upload():
     return jsonify({
         "filename": file.filename,
         "chars": len(text),
+        "truncated": truncated,
         "preview": text[:300] + ("..." if len(text) > 300 else ""),
     })
 
@@ -121,45 +128,41 @@ def chat():
 
     doc = DOCUMENTS[doc_id]
 
-    system_blocks = [
-        {
-            "type": "text",
-            "text": (
-                "You are a helpful assistant that answers questions based on "
-                "the document the user has uploaded. Ground every answer in "
-                "the document content. If the answer is not in the document, "
-                "say so clearly. Reply in the same language as the user's "
-                "question. Be concise and specific; quote short relevant "
-                "excerpts when useful."
-            ),
-        },
-        {
-            "type": "text",
-            "text": f"Document filename: {doc['filename']}\n\n=== DOCUMENT START ===\n{doc['text']}\n=== DOCUMENT END ===",
-            "cache_control": {"type": "ephemeral"},
-        },
-    ]
+    system_prompt = (
+        "You are a helpful assistant that answers questions based on "
+        "the document the user has uploaded. Ground every answer in the "
+        "document content. If the answer is not in the document, say so "
+        "clearly. Reply in the same language as the user's question. Be "
+        "concise and specific; quote short relevant excerpts when useful.\n\n"
+        f"Document filename: {doc['filename']}\n\n"
+        f"=== DOCUMENT START ===\n{doc['text']}\n=== DOCUMENT END ==="
+    )
 
-    messages = list(doc["history"]) + [{"role": "user", "content": question}]
+    messages = (
+        [{"role": "system", "content": system_prompt}]
+        + list(doc["history"])
+        + [{"role": "user", "content": question}]
+    )
 
     try:
-        response = client.messages.create(
+        response = client.chat.completions.create(
             model=MODEL,
-            max_tokens=4096,
-            system=system_blocks,
             messages=messages,
+            max_tokens=2048,
+            temperature=0.3,
         )
-    except anthropic.APIStatusError as e:
+    except APIStatusError as e:
         return jsonify({"error": f"API error: {e.message}"}), 502
-    except anthropic.APIConnectionError:
+    except APIConnectionError:
         return jsonify({"error": "Network error contacting the model."}), 502
 
-    answer = "".join(
-        block.text for block in response.content if block.type == "text"
-    )
+    answer = response.choices[0].message.content or ""
 
     doc["history"].append({"role": "user", "content": question})
     doc["history"].append({"role": "assistant", "content": answer})
+
+    if len(doc["history"]) > 20:
+        doc["history"] = doc["history"][-20:]
 
     return jsonify({"answer": answer})
 
