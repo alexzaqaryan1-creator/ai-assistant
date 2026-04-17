@@ -9,7 +9,9 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from docx import Document as DocxDocument
 from pypdf import PdfReader
-from groq import Groq, APIStatusError, APIConnectionError
+from google import genai
+from google.genai import types
+from google.genai import errors as genai_errors
 
 load_dotenv()
 
@@ -24,13 +26,11 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
-import os
-from groq import Groq
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
-MAX_DOC_CHARS = 40_000
-MAX_HISTORY_TURNS = 6
+_api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+client = genai.Client(api_key=_api_key) if _api_key else None
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+MAX_DOC_CHARS = 100_000
+MAX_HISTORY_TURNS = 10
 
 DOCUMENTS: dict[str, dict] = {}
 
@@ -111,7 +111,7 @@ def upload():
         text = text[:MAX_DOC_CHARS]
         truncated = True
 
-    chat_id, chat_state = _get_or_create_chat()
+    _, chat_state = _get_or_create_chat()
     chat_state["filename"] = file.filename
     chat_state["text"] = text
 
@@ -127,6 +127,11 @@ def upload():
 @_require_auth
 @limiter.limit("30 per hour")
 def chat():
+    if client is None:
+        return jsonify({
+            "error": "Server is missing GEMINI_API_KEY. Set it in Render → Environment."
+        }), 500
+
     payload = request.get_json() or {}
     question = (payload.get("question") or "").strip()
     if not question:
@@ -151,29 +156,37 @@ def chat():
             "uploads a document, they can ask questions about it."
         )
 
-    messages = (
-        [{"role": "system", "content": system_prompt}]
-        + list(doc["history"])
-        + [{"role": "user", "content": question}]
-    )
+    gemini_contents = []
+    for msg in doc["history"]:
+        role = "user" if msg["role"] == "user" else "model"
+        gemini_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+    gemini_contents.append({"role": "user", "parts": [{"text": question}]})
 
     try:
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL,
-            messages=messages,
-            max_tokens=1024,
-            temperature=0.3,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=1024,
+                temperature=0.3,
+            ),
+            contents=gemini_contents,
         )
-    except APIStatusError as e:
-        if e.status_code == 413 or "rate_limit" in str(e).lower():
+    except genai_errors.ClientError as e:
+        msg = str(e)
+        if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
             return jsonify({
-                "error": "The document + chat is too big for the free-tier model in one minute. Wait 60 seconds and try again, or upload a shorter document."
+                "error": "Rate limit reached for the free Gemini tier. Wait a minute and try again."
             }), 429
-        return jsonify({"error": f"API error: {e.message}"}), 502
-    except APIConnectionError:
-        return jsonify({"error": "Network error contacting the model."}), 502
+        return jsonify({"error": f"API error: {msg}"}), 502
+    except genai_errors.ServerError as e:
+        return jsonify({"error": f"Gemini server error: {e}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {e}"}), 500
 
-    answer = response.choices[0].message.content or ""
+    answer = (response.text or "").strip()
+    if not answer:
+        answer = "(No response — the model returned nothing.)"
 
     doc["history"].append({"role": "user", "content": question})
     doc["history"].append({"role": "assistant", "content": answer})

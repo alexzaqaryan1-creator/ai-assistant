@@ -1,16 +1,16 @@
 # Document AI Assistant
 
-A small Flask app that lets users upload a document (PDF, DOCX, TXT, MD) and chat with **Llama 3.3 70B via Groq's free API** about its contents.
+A small Flask app that lets users chat with **Google Gemini 2.0 Flash** (free tier). Optionally upload a document (PDF, DOCX, TXT, MD) and questions will be grounded in its contents.
 
 ## Run locally
 
 ```
 pip install -r requirements.txt
-echo GROQ_API_KEY=gsk_your-key > .env
+echo GEMINI_API_KEY=your-key > .env
 python main.py
 ```
 
-Open <http://127.0.0.1:5000>. Get a free Groq API key at <https://console.groq.com>.
+Open <http://127.0.0.1:5000>. Get a free Gemini API key at <https://aistudio.google.com/apikey>.
 
 ## Deploy
 
@@ -22,14 +22,14 @@ Hosted on **Render**, auto-deployed via **GitHub Actions**.
 2. On <https://render.com>:
    - New → Blueprint → connect the repo.
    - Render reads `render.yaml` and creates the service.
-   - In the service's **Environment** tab, paste your `GROQ_API_KEY`. Optionally set `APP_PASSWORD` to gate access.
+   - In the service's **Environment** tab, paste your `GEMINI_API_KEY`. Optionally set `APP_PASSWORD` to gate access.
    - Under **Settings → Deploy Hook**, copy the hook URL.
 3. On GitHub: **Settings → Secrets and variables → Actions → New repository secret**
    - Name: `RENDER_DEPLOY_HOOK_URL`
    - Value: the URL from step 2.
 
-Every push to `main` now runs the workflow in `.github/workflows/deploy.yml`, which imports-checks the app and pings Render to redeploy.
+Every push to `main` runs the workflow in `.github/workflows/deploy.yml`, which imports-checks the app and pings Render to redeploy.
 
-## Cost
+## Free tier limits
 
-Groq offers a generous **free tier** — rate-limited but doesn't cost anything. Set `APP_PASSWORD` in Render if you want to restrict access.
+Gemini 2.0 Flash free tier: **1500 requests/day, ~15 requests/min, 1M tokens/min**. Very generous for small apps. Set `APP_PASSWORD` in Render if you want to restrict access further.
