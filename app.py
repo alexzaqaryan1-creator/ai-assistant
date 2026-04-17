@@ -29,7 +29,8 @@ from groq import Groq
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 MODEL = "llama-3.3-70b-versatile"
-MAX_DOC_CHARS = 200_000
+MAX_DOC_CHARS = 28_000
+MAX_HISTORY_TURNS = 6
 
 DOCUMENTS: dict[str, dict] = {}
 
@@ -151,10 +152,14 @@ def chat():
         response = client.chat.completions.create(
             model=MODEL,
             messages=messages,
-            max_tokens=2048,
+            max_tokens=1024,
             temperature=0.3,
         )
     except APIStatusError as e:
+        if e.status_code == 413 or "rate_limit" in str(e).lower():
+            return jsonify({
+                "error": "The document + chat is too big for the free-tier model in one minute. Wait 60 seconds and try again, or upload a shorter document."
+            }), 429
         return jsonify({"error": f"API error: {e.message}"}), 502
     except APIConnectionError:
         return jsonify({"error": "Network error contacting the model."}), 502
@@ -164,8 +169,9 @@ def chat():
     doc["history"].append({"role": "user", "content": question})
     doc["history"].append({"role": "assistant", "content": answer})
 
-    if len(doc["history"]) > 20:
-        doc["history"] = doc["history"][-20:]
+    max_messages = MAX_HISTORY_TURNS * 2
+    if len(doc["history"]) > max_messages:
+        doc["history"] = doc["history"][-max_messages:]
 
     return jsonify({"answer": answer})
 
