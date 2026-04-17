@@ -37,6 +37,16 @@ DOCUMENTS: dict[str, dict] = {}
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
 
 
+def _get_or_create_chat() -> tuple[str, dict]:
+    chat_id = session.get("doc_id")
+    if chat_id and chat_id in DOCUMENTS:
+        return chat_id, DOCUMENTS[chat_id]
+    chat_id = uuid.uuid4().hex
+    DOCUMENTS[chat_id] = {"filename": None, "text": None, "history": []}
+    session["doc_id"] = chat_id
+    return chat_id, DOCUMENTS[chat_id]
+
+
 def _require_auth(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -101,13 +111,9 @@ def upload():
         text = text[:MAX_DOC_CHARS]
         truncated = True
 
-    doc_id = uuid.uuid4().hex
-    DOCUMENTS[doc_id] = {
-        "filename": file.filename,
-        "text": text,
-        "history": [],
-    }
-    session["doc_id"] = doc_id
+    chat_id, chat_state = _get_or_create_chat()
+    chat_state["filename"] = file.filename
+    chat_state["text"] = text
 
     return jsonify({
         "filename": file.filename,
@@ -121,26 +127,29 @@ def upload():
 @_require_auth
 @limiter.limit("30 per hour")
 def chat():
-    doc_id = session.get("doc_id")
-    if not doc_id or doc_id not in DOCUMENTS:
-        return jsonify({"error": "Please upload a document first."}), 400
-
     payload = request.get_json() or {}
     question = (payload.get("question") or "").strip()
     if not question:
         return jsonify({"error": "Empty question"}), 400
 
-    doc = DOCUMENTS[doc_id]
+    _, doc = _get_or_create_chat()
 
-    system_prompt = (
-        "You are a helpful assistant that answers questions based on "
-        "the document the user has uploaded. Ground every answer in the "
-        "document content. If the answer is not in the document, say so "
-        "clearly. Reply in the same language as the user's question. Be "
-        "concise and specific; quote short relevant excerpts when useful.\n\n"
-        f"Document filename: {doc['filename']}\n\n"
-        f"=== DOCUMENT START ===\n{doc['text']}\n=== DOCUMENT END ==="
-    )
+    if doc.get("text"):
+        system_prompt = (
+            "You are a helpful assistant. The user has uploaded a document; "
+            "answer questions about it by grounding every response in the "
+            "document content. If the answer isn't in the document, say so "
+            "and offer your general knowledge. Reply in the user's language. "
+            "Be concise and quote short excerpts when useful.\n\n"
+            f"Document filename: {doc['filename']}\n\n"
+            f"=== DOCUMENT START ===\n{doc['text']}\n=== DOCUMENT END ==="
+        )
+    else:
+        system_prompt = (
+            "You are a helpful, friendly assistant. Reply in the same "
+            "language as the user. Be concise and clear. If the user later "
+            "uploads a document, they can ask questions about it."
+        )
 
     messages = (
         [{"role": "system", "content": system_prompt}]

@@ -45,9 +45,6 @@ async function uploadFile(file) {
         docInfo.querySelector(".doc-meta").textContent =
             `${data.chars.toLocaleString()} characters extracted`;
         docInfo.classList.remove("hidden");
-        chatInput.disabled = false;
-        sendBtn.disabled = false;
-        messagesEl.innerHTML = "";
         addMessage("assistant",
             `Got "${data.filename}". Ask me anything about it.`);
         chatInput.focus();
@@ -60,11 +57,9 @@ resetBtn.addEventListener("click", async () => {
     await fetch("/reset", { method: "POST" });
     docInfo.classList.add("hidden");
     fileInput.value = "";
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
     messagesEl.innerHTML =
-        '<div class="empty-state"><h2>Ready when you are.</h2>' +
-        '<p>Upload a document on the left to begin the conversation.</p></div>';
+        '<div class="empty-state"><h2>Hi there.</h2>' +
+        '<p>Ask me anything, or upload a document on the left to chat about its contents.</p></div>';
 });
 
 chatForm.addEventListener("submit", async (e) => {
