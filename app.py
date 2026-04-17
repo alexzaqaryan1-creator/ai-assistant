@@ -28,8 +28,8 @@ import os
 from groq import Groq
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = "llama-3.3-70b-versatile"
-MAX_DOC_CHARS = 28_000
+MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+MAX_DOC_CHARS = 40_000
 MAX_HISTORY_TURNS = 6
 
 DOCUMENTS: dict[str, dict] = {}
